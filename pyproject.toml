@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "garmin-coach"
+version = "1.0.0"
+description = "Google ADK-powered self-hosted Garmin coaching agent"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Sergiy", email = ""},
+]
+keywords = ["garmin", "ai-agent", "google-adk", "gemini", "telegram", "running", "coaching", "self-hosted"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/GitSergii/Garmin-Coach"
+Repository = "https://github.com/GitSergii/Garmin-Coach"
+Issues = "https://github.com/GitSergii/Garmin-Coach/issues"
+dependencies = [
+    # Gen AI SDK (pinned high enough for google-adk; keep <2)
+    "google-genai>=1.72.0,<2.0.0",
+    # Agent Development Kit (require >=1.x; 0.0.1 on PyPI is unrelated)
+    "google-adk>=1.31.0,<2.0.0",
+    "python-telegram-bot>=21.0,<22.0",
+    "garminconnect==0.2.28",
+    "garth==0.5.17",
+    # Database and ORM
+    "sqlalchemy>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "alembic>=1.13.0,<2.0.0",
+    # Data Processing - Fixed versions to prevent conflicts
+    "numpy>=1.24.0,<2.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "pydantic>=2.6.0,<3.0.0", # Updated to fix garminconnect compatibility
+    # Visualization
+    "matplotlib>=3.7.0,<4.0.0",
+    "plotly>=5.15.0,<6.0.0",
+    # Environment and Security
+    "python-dotenv>=1.0.0,<2.0.0",
+    "cryptography>=41.0.0,<42.0.0",
+    # Cloud Services
+    "google-cloud-logging>=3.8.0,<4.0.0",
+    "google-cloud-storage>=2.10.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<8.0.0",
+    "black>=23.0.0,<24.0.0",
+    "flake8>=6.0.0,<7.0.0",
+    "mypy>=1.5.0,<2.0.0",
+]
+
+# UV-specific configuration for reproducible builds
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0,<8.0.0",
+    "black>=23.0.0,<24.0.0",
+    "flake8>=6.0.0,<7.0.0",
+    "mypy>=1.5.0,<2.0.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+] 
