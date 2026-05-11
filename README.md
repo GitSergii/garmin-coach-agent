@@ -113,29 +113,18 @@ Run `/setup` to enter your Garmin credentials, then `/sync` to pull your data.
 
 Once synced, just talk to it naturally:
 
-```
-You:   How did I do this week?
-Bot:   Here's your week summary: 4 runs, 61 km total, avg resting HR 44 bpm.
-       Sleep averaged 7.2h with solid REM. Load is moderate — no overtraining signal.
-
-You:   Am I overtraining?
-Bot:   No clear overtraining signal. Resting HR is stable and sleep quality is good.
-       Last week's load (61 km) is consistent with your recent trend. You're building well.
-
-You:   Build me a training plan for next week. Goal: 100km ultramarathon.
-Bot:   Weekly objective: aerobic base + endurance for 100 km ultra.
-       - 4 × Easy runs: 8–10 km, conversational pace
-       - 1 × Threshold session: 8 km with short intervals
-       - 1 × Long run: 18–22 km, easy and time-on-feet focused
-       - 1–2 rest/active recovery days
-       Keep weekly increase under 10%. If resting HR is elevated, drop the quality session.
-
-You:   Show my sleep trend
-Bot:   [sends chart image — 14-day sleep bar chart with 7-day rolling average]
-
-You:   How far did I run last Tuesday?
-Bot:   You ran 8.6 km on Tuesday May 8, avg HR 128 bpm, elevation gain 110 m.
-```
+<table>
+<tr>
+<td align="center"><b>Overtraining check</b></td>
+<td align="center"><b>Weekly training plan</b></td>
+<td align="center"><b>Charts &amp; run details</b></td>
+</tr>
+<tr>
+<td><img src="docs/assets/screenshot-overtraining.png" width="260" alt="Overtraining check"/></td>
+<td><img src="docs/assets/screenshot-weekly-plan.png" width="260" alt="Weekly plan"/></td>
+<td><img src="docs/assets/screenshot-chart-and-run.png" width="260" alt="Chart and run detail"/></td>
+</tr>
+</table>
 
 ---
 

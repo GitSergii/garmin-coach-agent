@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from tools.db_tools import DatabaseTools
@@ -30,12 +30,12 @@ async def build_coach_context_payload(
     activities_limit: int = 10,
 ) -> Dict[str, Any]:
     """Return JSON-serializable context: profile, recent summaries, activities."""
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
     profile = await db_tools.get_user_profile(user_id)
     summaries = await db_tools.get_daily_summaries(user_id, start, end)
-    activities = await db_tools.get_recent_activities(user_id, limit=activities_limit)
+    activities = await db_tools.get_recent_activities(user_id, limit=activities_limit, since=start)
 
     goals = (profile or {}).get("goals") or []
 

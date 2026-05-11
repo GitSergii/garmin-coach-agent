@@ -25,7 +25,7 @@ class _FakeDbTools:
             },
         ]
 
-    async def get_recent_activities(self, user_id, limit=30):
+    async def get_recent_activities(self, user_id, limit=200, since=None):
         _ = (user_id, limit)
         return [
             {

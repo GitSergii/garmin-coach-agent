@@ -409,13 +409,30 @@ class DatabaseTools:
             self.logger.error(f"Error getting daily summaries for {user_id}: {e}")
             return []
     
-    async def get_recent_activities(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get recent activities for a user with normalized field names."""
+    async def get_recent_activities(
+        self,
+        user_id: str,
+        limit: int = 200,
+        since: "datetime | None" = None,
+    ) -> List[Dict[str, Any]]:
+        """Get recent activities for a user with normalized field names.
+
+        Args:
+            since: Optional lower-bound datetime (inclusive). When provided the
+                   DB-level filter ensures only activities within the requested
+                   window are returned, preventing inflated multi-week totals.
+        """
         try:
             with self.database.get_session() as session:
-                activities = session.query(GarminActivity).filter(
+                q = session.query(GarminActivity).filter(
                     GarminActivity.user_id == user_id
-                ).order_by(desc(GarminActivity.start_time)).limit(limit).all()
+                )
+                if since is not None:
+                    # Normalise to naive UTC so the comparison works regardless
+                    # of whether start_time is stored as aware or naive.
+                    since_naive = since.replace(tzinfo=None) if since.tzinfo else since
+                    q = q.filter(GarminActivity.start_time >= since_naive)
+                activities = q.order_by(desc(GarminActivity.start_time)).limit(limit).all()
                 
                 return [
                     {

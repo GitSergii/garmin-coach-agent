@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from analytics.context_payload import aggregate_running_week
@@ -23,11 +23,11 @@ async def build_fitness_analysis_payload(
     activities_limit: int = 30,
 ) -> Dict[str, Any]:
     """Compute simple, deterministic trend/load/fatigue indicators."""
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
     summaries = await db_tools.get_daily_summaries(user_id, start, end)
-    activities = await db_tools.get_recent_activities(user_id, limit=activities_limit)
+    activities = await db_tools.get_recent_activities(user_id, limit=activities_limit, since=start)
     running = aggregate_running_week(summaries, activities)
 
     steps = [float(s.get("steps") or 0) for s in summaries if s.get("steps") is not None]
