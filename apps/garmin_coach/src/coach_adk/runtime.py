@@ -6,7 +6,7 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from google.adk.runners import Runner
@@ -173,13 +173,13 @@ class AdkCoachRuntime:
         return tools_used, assembled, chart_data
 
     async def process_message(self, user_id: str, message: str) -> CoachResponse:
-        started = datetime.utcnow()
+        started = datetime.now(timezone.utc)
         self._total_requests += 1
         await self._ensure_session(user_id)
 
         tools_used, assembled, chart_data = await self._run_single_turn(user_id, message)
 
-        elapsed_ms = (datetime.utcnow() - started).total_seconds() * 1000.0
+        elapsed_ms = (datetime.now(timezone.utc) - started).total_seconds() * 1000.0
         text_out = "\n".join(assembled).strip() or "(No textual reply from model.)"
         return CoachResponse(
             text=text_out,

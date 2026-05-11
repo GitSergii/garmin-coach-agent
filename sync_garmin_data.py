@@ -10,7 +10,7 @@ It is intended for production-grade personal data synchronization.
 import sys
 import os
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from sqlalchemy import text
 
@@ -122,7 +122,7 @@ async def sync_real_garmin_data():
             # Sync activities
             print("\n🏃 Syncing activities...")
             try:
-                activities = await garmin_client.get_activities(user_id, start_date, limit=20)
+                activities = await garmin_client.get_activities(user_id, start_date, limit=500)
                 activity_sync_count = 0
                 for activity in activities:
                     try:
@@ -134,14 +134,28 @@ async def sync_real_garmin_data():
                     except Exception as e:
                         print(f"   ❌ Activity sync error: {e}")
                 
-                print(f"   📊 Synced {activity_sync_count} activities")
+                print(f"   ✅ Activities synced: {activity_sync_count}")
             except Exception as e:
                 print(f"   ❌ Activities sync error: {e}")
             
-            # Note: Sleep data is already included in daily summaries from get_stats_and_body
-            # No need to sync sleep data separately to avoid conflicts
-            print("\n💤 Sleep data is included in daily summaries (no separate sync needed)")
+            # Sync sleep data (detailed breakdown: deep, REM, quality)
+            print("\n💤 Syncing sleep data...")
             sleep_sync_count = 0
+            current_date = start_date
+            while current_date <= end_date:
+                try:
+                    sleep_data = await garmin_client.get_sleep_data(user_id, current_date)
+                    if sleep_data:
+                        await garmin_client._store_sleep_data(user_id, current_date, sleep_data)
+                        sleep_sync_count += 1
+                        dto = sleep_data.get("dailySleepDTO", {}) if isinstance(sleep_data, dict) else {}
+                        total_min = (dto.get("sleepTimeSeconds") or 0) // 60
+                        print(f"   ✅ {current_date.strftime('%Y-%m-%d')}: {total_min} min sleep")
+                    else:
+                        print(f"   ⚠️  {current_date.strftime('%Y-%m-%d')}: No sleep data")
+                except Exception as e:
+                    print(f"   ❌ {current_date.strftime('%Y-%m-%d')}: Sleep sync error - {e}")
+                current_date += timedelta(days=1)
             
             # Sync heart rate data (last 3 days for detailed data)
             print("\n❤️ Syncing heart rate data...")
@@ -164,7 +178,7 @@ async def sync_real_garmin_data():
                 current_date += timedelta(days=1)
             
             # Update user's last sync time
-            user.last_garmin_sync_at = datetime.utcnow()
+            user.last_garmin_sync_at = datetime.now(timezone.utc)
             session.commit()
             
             # Show summary

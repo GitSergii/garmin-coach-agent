@@ -1,15 +1,18 @@
-"""Canonical ADK agent definition with module-level skills and tools."""
+"""Google ADK agent definition with module-level skills and tools."""
 
 import json
+import logging
 import os
 import pathlib
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from google import genai
 from google.adk import Agent
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools import FunctionTool
-from google.adk.tools import skill_toolset
+from google.adk.tools.skill_toolset import SkillToolset
 from google.adk.tools.tool_context import ToolContext
 
 from analytics.context_payload import build_coach_context_payload
@@ -172,7 +175,7 @@ async def render_chart(
       metric      – daily summary column, e.g. sleep_duration_hours, resting_heart_rate,
                     distance_km, steps, calories_burned, active_minutes, stress_level_avg,
                     body_battery_level, vo2_max
-      chart_type  – trend | weekly | activity | dashboard (default: dashboard)
+      chart_type  – trend | bar | weekly | activity_bars | activity | dashboard (default: dashboard)
       days        – integer, window for trend charts (default: 14)
       weeks       – integer, window for weekly bar charts (default: 8)
       title       – optional custom chart title
@@ -184,6 +187,7 @@ async def render_chart(
       "chart_type=activity"
       "chart_type=dashboard"
     """
+    logger.info("render_chart called with spec: %r", chart_request)
     if not _enable_charts:
         return json.dumps({"error": "charts_disabled", "hint": "Set ENABLE_CHARTS=true"})
     if _chart_tools is None:
@@ -200,7 +204,7 @@ async def render_chart(
 # ---------------------------------------------------------------------------
 # SkillToolset — skills + registered production tools
 # ---------------------------------------------------------------------------
-_skill_toolset = skill_toolset.SkillToolset(
+_skill_toolset = SkillToolset(
     skills=_skills,
     additional_tools=[
         FunctionTool(get_context_data),
@@ -212,7 +216,7 @@ _skill_toolset = skill_toolset.SkillToolset(
 )
 
 # ---------------------------------------------------------------------------
-# Canonical module-level root_agent definition
+# Module-level root_agent definition
 # ---------------------------------------------------------------------------
 root_agent = Agent(
     model=_model_name,
@@ -220,8 +224,7 @@ root_agent = Agent(
     description="Personal AI running and recovery coach backed by Garmin data.",
     instruction=(
         "You are a concise running and recovery coach for a single self-hosted user. "
-        "Use the available skills to handle coaching requests. "
-        "Always load the relevant skill before answering data questions. "
+        "Use the available skills to handle all requests. "
         "Keep replies short and Telegram-friendly. "
         "FORMATTING RULES: use plain text, bullet lists, and emoji where helpful. "
         "Never use markdown bold or italic. "

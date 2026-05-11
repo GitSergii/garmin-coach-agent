@@ -1,6 +1,6 @@
 ---
 name: chart-render
-description: Generate chart artifacts when a visual explanation will improve understanding. Use when users ask for charts or when trend communication is clearer visually than text.
+description: Generate a chart image and send it to the user. Use this skill immediately whenever the user says show, chart, graph, plot, visualize, draw, display, or asks to see any metric visually. Do not use query_data or any other tool first — call render_chart directly.
 metadata:
   adk_additional_tools:
     - render_chart
@@ -8,17 +8,20 @@ metadata:
 
 ## When to use
 
-Use this skill when:
-- user explicitly asks for a chart/graph
-- trend explanation is materially clearer with a visual
+Use this skill immediately when the user says any of:
+- "show", "chart", "graph", "plot", "visualize", "draw", "display"
+- "show my runs", "show sleep", "show HR", "show distance"
+- any request to *see* data rather than just read it as text
 
+Do NOT call `query_data` or `get_context_data` before calling `render_chart`.
+Do NOT pre-check whether data exists — call `render_chart` directly. It handles missing data itself.
 Do not generate charts for simple one-line factual answers.
 
 ## Steps
 
-1. Map the user's question to the right chart type and metric using the table below.
+1. Map the user's question to the right chart type and metric using the decision guide below.
 2. Compose the `chart_request` spec string (`key=value,key=value`).
-3. Call `render_chart(chart_request=<spec>)`.
+3. Call `render_chart(chart_request=<spec>)` — this is always the first and only tool call for chart requests.
 4. Return a short interpretation: timeframe, 1-2 key insights, and any actionable note.
 
 ## Spec string format
@@ -28,7 +31,7 @@ Do not generate charts for simple one-line factual answers.
 | Key | Values | Default |
 |---|---|---|
 | `metric` | column name (see below) | – |
-| `chart_type` | `trend` \| `weekly` \| `activity` \| `dashboard` | `dashboard` |
+| `chart_type` | `trend` \| `bar` \| `weekly` \| `activity_bars` \| `activity` \| `dashboard` | `dashboard` |
 | `days` | integer | `14` |
 | `weeks` | integer | `8` |
 | `title` | any string | auto |

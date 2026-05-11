@@ -157,10 +157,13 @@ class GarminClient:
     async def authenticate_user(self, user_id: str, email: str, password: str) -> bool:
         """Authenticate with Garmin Connect and store credentials + OAuth tokens."""
         try:
-            token_store = str(self._token_store_path(user_id))
+            token_store_path = self._token_store_path(user_id)
             garmin = Garmin(email, password)
+            # Fresh SSO login — no tokenstore arg (garth would FileNotFoundError if no tokens)
+            await asyncio.get_event_loop().run_in_executor(None, garmin.login)
+            # Persist tokens for future restarts so SSO is not repeated
             await asyncio.get_event_loop().run_in_executor(
-                None, lambda: garmin.login(tokenstore=token_store)
+                None, lambda: garmin.garth.dump(str(token_store_path))
             )
             self._garmin_clients[user_id] = garmin
 
@@ -201,31 +204,37 @@ class GarminClient:
                     self.logger.warning(f"Unable to decrypt Garmin password for user {user_id}")
                     return False
 
-            token_store = str(self._token_store_path(user_id))
+            token_store_path = self._token_store_path(user_id)
+            token_file = token_store_path / "oauth1_token.json"
+            token_store = str(token_store_path)
             garmin = Garmin(email, password)
 
-            # Attempt token-based login first — avoids password auth and SSO rate-limits
-            try:
-                await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: garmin.login(tokenstore=token_store)
-                )
-                self._garmin_clients[user_id] = garmin
-                self.logger.info(f"Garmin session restored from saved tokens for user {user_id}")
-                return True
-            except Exception as token_err:
-                self.logger.warning(
-                    f"Token login failed for user {user_id} ({token_err}); "
-                    "falling back to password auth"
-                )
+            # Attempt token-based login ONLY if token files exist on disk.
+            # garth raises FileNotFoundError when passed a tokenstore with no files.
+            if token_file.exists():
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: garmin.login(tokenstore=token_store)
+                    )
+                    self._garmin_clients[user_id] = garmin
+                    self.logger.info(f"Garmin session restored from saved tokens for user {user_id}")
+                    return True
+                except Exception as token_err:
+                    self.logger.warning(
+                        f"Token login failed for user {user_id} ({token_err}); "
+                        "falling back to password auth"
+                    )
 
-            # Full password login as fallback
+            # Full SSO password login — no tokenstore arg to avoid FileNotFoundError
             try:
                 garmin2 = Garmin(email, password)
+                await asyncio.get_event_loop().run_in_executor(None, garmin2.login)
+                # Persist tokens so next restart uses token login
                 await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: garmin2.login(tokenstore=token_store)
+                    None, lambda: garmin2.garth.dump(token_store)
                 )
                 self._garmin_clients[user_id] = garmin2
-                self.logger.info(f"Garmin full-auth OK for user {user_id} (tokens refreshed)")
+                self.logger.info(f"Garmin full-auth OK for user {user_id} (tokens saved)")
                 return True
             except GarminConnectAuthenticationError:
                 self.logger.error(f"Authentication failed for user {user_id}")
@@ -673,13 +682,14 @@ class GarminClient:
                 distance_meters = summary_data.get('totalDistanceMeters', 0)
                 active_minutes = summary_data.get('activeSeconds', 0) // 60 if summary_data.get('activeSeconds') else 0
                 resting_hr = summary_data.get('restingHeartRate', 0)
-                avg_hr = summary_data.get('minAvgHeartRate', 0)  # Using min as avg for now
+                # averageHeartRate exists in stats for some days; minAvgHeartRate is not a real field
+                avg_hr = summary_data.get('averageHeartRate') or summary_data.get('restingHeartRate') or 0
                 max_hr = summary_data.get('maxHeartRate', 0)
-                
-                # Sleep data from the same response
+
+                # Sleep duration from the same stats response
                 sleep_seconds = summary_data.get('sleepingSeconds', 0)
                 sleep_hours = sleep_seconds / 3600 if sleep_seconds else None
-                
+
                 # Stress and body battery
                 stress_avg = summary_data.get('averageStressLevel', 0)
                 body_battery = summary_data.get('bodyBatteryMostRecentValue', 0)
@@ -694,35 +704,40 @@ class GarminClient:
                     GarminDailySummary.activity_date == canonical_date,
                 ).first()
 
+                # Pull sleep stages from GarminSleep row for the same day if available
+                sleep_row = session.query(GarminSleep).filter(
+                    GarminSleep.user_id == user_id,
+                    GarminSleep.sleep_date == canonical_date,
+                ).first()
+                deep_sleep_min = sleep_row.deep_sleep_minutes if sleep_row else None
+                rem_sleep_min  = sleep_row.rem_sleep_minutes  if sleep_row else None
+                sleep_quality  = sleep_row.sleep_quality_score if sleep_row else None
+
+                summary_fields = dict(
+                    steps=steps,
+                    calories_burned=calories,
+                    distance_km=distance_meters / 1000 if distance_meters else None,
+                    active_minutes=active_minutes,
+                    resting_heart_rate=resting_hr,
+                    avg_heart_rate=avg_hr,
+                    max_heart_rate=max_hr,
+                    sleep_duration_hours=sleep_hours,
+                    deep_sleep_minutes=deep_sleep_min,
+                    rem_sleep_minutes=rem_sleep_min,
+                    sleep_quality_score=sleep_quality,
+                    stress_level_avg=stress_avg,
+                    body_battery_level=body_battery,
+                    data_completeness_percentage=100.0,
+                    sync_status="completed",
+                )
                 if existing:
-                    existing.steps = steps
-                    existing.calories_burned = calories
-                    existing.distance_km = distance_meters / 1000 if distance_meters else None
-                    existing.active_minutes = active_minutes
-                    existing.resting_heart_rate = resting_hr
-                    existing.avg_heart_rate = avg_hr
-                    existing.max_heart_rate = max_hr
-                    existing.sleep_duration_hours = sleep_hours
-                    existing.stress_level_avg = stress_avg
-                    existing.body_battery_level = body_battery
-                    existing.data_completeness_percentage = 100.0
-                    existing.sync_status = "completed"
+                    for k, v in summary_fields.items():
+                        setattr(existing, k, v)
                 else:
                     session.add(GarminDailySummary(
                         user_id=user_id,
                         activity_date=canonical_date,
-                        steps=steps,
-                        calories_burned=calories,
-                        distance_km=distance_meters / 1000 if distance_meters else None,
-                        active_minutes=active_minutes,
-                        resting_heart_rate=resting_hr,
-                        avg_heart_rate=avg_hr,
-                        max_heart_rate=max_hr,
-                        sleep_duration_hours=sleep_hours,
-                        stress_level_avg=stress_avg,
-                        body_battery_level=body_battery,
-                        data_completeness_percentage=100.0,
-                        sync_status="completed",
+                        **summary_fields,
                     ))
                 session.commit()
                 
@@ -731,75 +746,103 @@ class GarminClient:
         except Exception as e:
             self.logger.error(f"Failed to store daily summary for user {user_id}, date {date}: {e}")
     
+    @staticmethod
+    def _parse_sleep_dto(raw: dict) -> dict:
+        """Extract sleep metrics from Garmin API response into a flat dict.
+
+        Garmin returns sleep data with meaningful values inside ``dailySleepDTO``.
+        The top-level dict has ``sleepLevels``, ``remSleepData`` etc. but NOT the
+        duration totals — those live one level deeper.
+        """
+        dto = raw.get("dailySleepDTO", raw) if isinstance(raw, dict) else {}
+
+        sleep_time_s   = int(dto.get("sleepTimeSeconds",   0) or 0)
+        deep_sleep_s   = int(dto.get("deepSleepSeconds",   0) or 0)
+        light_sleep_s  = int(dto.get("lightSleepSeconds",  0) or 0)
+        rem_sleep_s    = int(dto.get("remSleepSeconds",    0) or 0)
+        awake_s        = int(dto.get("awakeSleepSeconds",  0) or 0)
+
+        # Sleep quality: derive efficiency score (0–100) when data allows
+        total_in_bed = sleep_time_s + awake_s
+        quality: Optional[float] = None
+        if total_in_bed > 0:
+            quality = round(sleep_time_s / total_in_bed * 100, 1)
+
+        # Actual start/end from Unix-ms timestamps stored in the DTO
+        start_ts_ms = dto.get("sleepStartTimestampLocal") or dto.get("sleepStartTimestampGMT")
+        end_ts_ms   = dto.get("sleepEndTimestampLocal")   or dto.get("sleepEndTimestampGMT")
+
+        def _ms_to_dt(ms) -> Optional[datetime]:
+            if ms:
+                try:
+                    return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+                except (ValueError, OSError, OverflowError):
+                    pass
+            return None
+
+        return {
+            "sleep_time_s":   sleep_time_s,
+            "deep_sleep_s":   deep_sleep_s,
+            "light_sleep_s":  light_sleep_s,
+            "rem_sleep_s":    rem_sleep_s,
+            "awake_s":        awake_s,
+            "quality":        quality,
+            "start_dt":       _ms_to_dt(start_ts_ms),
+            "end_dt":         _ms_to_dt(end_ts_ms),
+        }
+
     async def _store_sleep_data(self, user_id: str, date: datetime, data: Any):
         """Store sleep data in database."""
         try:
-            # Handle different data formats from Garmin API
-            sleep_data = None
-            
-            # Debug: Log the raw data structure
-            self.logger.debug(f"Raw sleep data type: {type(data)}, data: {data}")
-            
             if isinstance(data, list):
-                # If data is a list, try to find the relevant entry
-                if len(data) > 0:
-                    # Use the first entry or find one matching the date
-                    sleep_data = data[0]
-                    self.logger.info(f"Processing sleep list data with {len(data)} entries for date {date.strftime('%Y-%m-%d')}")
-                    self.logger.debug(f"First sleep entry type: {type(sleep_data)}, value: {sleep_data}")
-                else:
-                    self.logger.warning(f"No sleep data entries found for date {date.strftime('%Y-%m-%d')}")
-                    return
-            elif isinstance(data, dict):
-                sleep_data = data
-            else:
-                self.logger.warning(f"Unexpected data type for sleep data: {type(data)}")
+                data = data[0] if data else None
+            if not isinstance(data, dict):
+                self.logger.warning("Unexpected sleep data type %s for date %s", type(data), date)
                 return
-            
-            # Ensure sleep_data is a dictionary - handle nested structures
-            if not isinstance(sleep_data, dict):
-                # Try to convert or extract dictionary from the data
-                if hasattr(sleep_data, '__dict__'):
-                    sleep_data = sleep_data.__dict__
-                elif isinstance(sleep_data, (str, int, float)):
-                    # If it's a primitive type, create a simple dict
-                    sleep_data = {'value': sleep_data}
-                else:
-                    self.logger.warning(f"Sleep data is not a dictionary and cannot be converted: {type(sleep_data)}")
-                    return
-            
+
+            m = self._parse_sleep_dto(data)
+            if m["sleep_time_s"] == 0:
+                self.logger.warning("Sleep DTO returned 0 sleepTimeSeconds for %s — skipping", date)
+                return
+
+            canonical_date = date.astimezone(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            sleep_start = m["start_dt"] or canonical_date
+            sleep_end   = m["end_dt"]   or (canonical_date + timedelta(hours=m["sleep_time_s"] / 3600))
+
             with self.database.get_session() as session:
-                # Extract values safely with defaults - FIXED field names
-                sleep_time_seconds = sleep_data.get('sleepingSeconds', sleep_data.get('sleepTimeSeconds', 0))
-                deep_sleep_seconds = sleep_data.get('deepSleepSeconds', 0)
-                light_sleep_seconds = sleep_data.get('lightSleepSeconds', 0)
-                rem_sleep_seconds = sleep_data.get('remSleepSeconds', 0)
-                awake_sleep_seconds = sleep_data.get('awakeSleepSeconds', 0)
-                sleep_quality = sleep_data.get('sleepQuality', 0)
-                
-                # Use SQLAlchemy merge for proper upsert
-                sleep_record = GarminSleep(
-                    user_id=user_id,
-                    sleep_date=date,
-                    sleep_start_time=date,  # Simplified
-                    sleep_end_time=date + timedelta(hours=8),  # Simplified
-                    total_sleep_minutes=sleep_time_seconds // 60,
-                    deep_sleep_minutes=deep_sleep_seconds // 60,
-                    light_sleep_minutes=light_sleep_seconds // 60,
-                    rem_sleep_minutes=rem_sleep_seconds // 60,
-                    awake_minutes=awake_sleep_seconds // 60,
-                    sleep_quality_score=sleep_quality,
-                    raw_sleep_data=sleep_data
+                existing = session.query(GarminSleep).filter(
+                    GarminSleep.user_id == user_id,
+                    GarminSleep.sleep_date == canonical_date,
+                ).first()
+
+                fields = dict(
+                    sleep_date=canonical_date,
+                    sleep_start_time=sleep_start,
+                    sleep_end_time=sleep_end,
+                    total_sleep_minutes=m["sleep_time_s"] // 60,
+                    deep_sleep_minutes=m["deep_sleep_s"] // 60,
+                    light_sleep_minutes=m["light_sleep_s"] // 60,
+                    rem_sleep_minutes=m["rem_sleep_s"] // 60,
+                    awake_minutes=m["awake_s"] // 60,
+                    sleep_quality_score=m["quality"],
+                    raw_sleep_data=data,
                 )
-                
-                # Merge will update existing record or create new one
-                merged_record = session.merge(sleep_record)
+                if existing:
+                    for k, v in fields.items():
+                        setattr(existing, k, v)
+                else:
+                    session.add(GarminSleep(id=str(uuid.uuid4()), user_id=user_id, **fields))
                 session.commit()
-                
-                self.logger.info(f"Upserted sleep data for user {user_id}, date {date.strftime('%Y-%m-%d')} - Total sleep: {sleep_time_seconds // 60} min")
-                
+
+            self.logger.info(
+                "Upserted sleep for user %s date %s — %d min total, deep=%d, REM=%d",
+                user_id, date.strftime("%Y-%m-%d"),
+                m["sleep_time_s"] // 60, m["deep_sleep_s"] // 60, m["rem_sleep_s"] // 60,
+            )
         except Exception as e:
-            self.logger.error(f"Failed to store sleep data for user {user_id}, date {date}: {e}")
+            self.logger.error("Failed to store sleep data for user %s, date %s: %s", user_id, date, e)
     
     async def _store_heart_rate_data(self, user_id: str, date: datetime, data: Any):
         """Store heart rate data in database."""
@@ -849,8 +892,8 @@ class GarminClient:
                         heart_rate = hr_point[1]    # Heart rate value
                         
                         if timestamp_ms and heart_rate and heart_rate > 0:
-                            # Convert milliseconds to datetime
-                            timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+                            # Convert milliseconds to timezone-aware UTC datetime
+                            timestamp = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
                             
                             # Check if record already exists
                             existing = session.query(GarminHeartRate).filter(
@@ -889,6 +932,17 @@ class GarminClient:
                 start_time_raw = activity.get('startTimeLocal', '')
                 start_time = datetime.fromisoformat(start_time_raw.replace('Z', '+00:00')) if start_time_raw else datetime.utcnow()
 
+                # Garmin API uses averageHR/maxHR (not averageHeartRate/maxHeartRate)
+                avg_hr = activity.get('averageHR') or activity.get('averageHeartRate') or 0
+                max_hr = activity.get('maxHR')     or activity.get('maxHeartRate')     or 0
+
+                # HR zones stored as JSONB dict
+                hr_zones = {
+                    str(z): activity.get(f"hrTimeInZone_{z}")
+                    for z in range(1, 6)
+                    if activity.get(f"hrTimeInZone_{z}") is not None
+                } or None
+
                 normalized_fields = {
                     "user_id": user_id,
                     "garmin_activity_id": garmin_activity_id,
@@ -900,8 +954,12 @@ class GarminClient:
                     "avg_speed_kmh": activity.get('averageSpeed', 0) * 3.6 if activity.get('averageSpeed') else None,
                     "max_speed_kmh": activity.get('maxSpeed', 0) * 3.6 if activity.get('maxSpeed') else None,
                     "calories_burned": activity.get('calories', 0),
-                    "avg_heart_rate": activity.get('averageHeartRate', 0),
-                    "max_heart_rate": activity.get('maxHeartRate', 0),
+                    "avg_heart_rate": avg_hr,
+                    "max_heart_rate": max_hr,
+                    "heart_rate_zones": hr_zones,
+                    "elevation_gain_m": activity.get('elevationGain'),
+                    "training_effect_aerobic": activity.get('aerobicTrainingEffect'),
+                    "training_effect_anaerobic": activity.get('anaerobicTrainingEffect'),
                     "raw_activity_data": activity,
                 }
 

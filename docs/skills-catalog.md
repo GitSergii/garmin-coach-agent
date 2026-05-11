@@ -1,6 +1,6 @@
 # Skills Catalog
 
-ADK filesystem skills live in `apps/garmin_coach/skills/`. Each skill is a Markdown file with YAML frontmatter declaring its name, description, and which registered tools it activates via `metadata.adk_additional_tools`.
+ADK filesystem skills live in `apps/garmin_coach/skills/`. Each skill is a Markdown file with YAML frontmatter (`name`, `description`) that the agent reads to decide when to activate the skill. All five `FunctionTool` instances are globally available via `SkillToolset(additional_tools=[...])` — skill activation does not change which tools are callable. The skill **body** (instructions injected into context on activation) guides the model on which tool to call and how.
 
 ## Inventory
 
@@ -24,7 +24,7 @@ Assembles a structured fitness context snapshot: profile, active goals, last 7 d
 ### `fitness-analysis`
 Runs deterministic trend analysis on recent load, sleep, heart rate, and fatigue indicators. Applies Norwegian method heuristics to flag overtraining risk or under-recovery.
 
-**Tool:** `analyze_fitness(analysis_type, days)` → structured analysis payload
+**Tool:** `analyze_fitness(days, activities_limit)` → structured analysis payload
 
 ---
 

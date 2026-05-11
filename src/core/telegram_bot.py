@@ -784,24 +784,13 @@ Let's get fit together! 💪
             self.logger.error(f"Failed to send chart image {chart_file}: {e}")
     
     def _clean_response_text(self, text: str) -> str:
-        """Clean response text to avoid Telegram parsing errors."""
+        """Enforce Telegram message length limit. No parse_mode is set so no
+        character escaping is needed — all symbols render as plain text."""
         if not text:
             return "I'm sorry, I couldn't generate a response. Please try again."
-        
-        # Remove or escape problematic characters
-        cleaned = text
-        
-        # Strip markdown formatting characters
-        cleaned = cleaned.replace("*", "")
-        cleaned = cleaned.replace("_", "")
-        cleaned = cleaned.replace("`", "'")
-        cleaned = cleaned.replace("```", "")
-        
-        # Limit length to avoid Telegram limits
-        if len(cleaned) > 4000:
-            cleaned = cleaned[:4000] + "..."
-        
-        return cleaned
+        if len(text) > 4000:
+            return text[:4000] + "..."
+        return text
     
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle callback queries from inline keyboards."""
