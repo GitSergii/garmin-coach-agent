@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "Sergiy", email = ""},
+    {name = "Sergii"},
 ]
 keywords = ["garmin", "ai-agent", "google-adk", "gemini", "telegram", "running", "coaching", "self-hosted"]
 classifiers = [
@@ -22,11 +22,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-
-[project.urls]
-Homepage = "https://github.com/GitSergii/Garmin-Coach"
-Repository = "https://github.com/GitSergii/Garmin-Coach"
-Issues = "https://github.com/GitSergii/Garmin-Coach/issues"
 dependencies = [
     # Gen AI SDK (pinned high enough for google-adk; keep <2)
     "google-genai>=1.72.0,<2.0.0",
@@ -39,10 +34,10 @@ dependencies = [
     "sqlalchemy>=2.0.0,<3.0.0",
     "psycopg2-binary>=2.9.0,<3.0.0",
     "alembic>=1.13.0,<2.0.0",
-    # Data Processing - Fixed versions to prevent conflicts
+    # Data Processing
     "numpy>=1.24.0,<2.0.0",
     "pandas>=2.0.0,<3.0.0",
-    "pydantic>=2.6.0,<3.0.0", # Updated to fix garminconnect compatibility
+    "pydantic>=2.6.0,<3.0.0",
     # Visualization
     "matplotlib>=3.7.0,<4.0.0",
     "plotly>=5.15.0,<6.0.0",
@@ -54,6 +49,11 @@ dependencies = [
     "google-cloud-storage>=2.10.0,<3.0.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/GitSergii/garmin-coach-agent"
+Repository = "https://github.com/GitSergii/garmin-coach-agent"
+Issues = "https://github.com/GitSergii/garmin-coach-agent/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0,<8.0.0",
@@ -62,13 +62,13 @@ dev = [
     "mypy>=1.5.0,<2.0.0",
 ]
 
-# UV-specific configuration for reproducible builds
 [tool.uv]
 dev-dependencies = [
     "pytest>=7.4.0,<8.0.0",
     "black>=23.0.0,<24.0.0",
     "flake8>=6.0.0,<7.0.0",
     "mypy>=1.5.0,<2.0.0",
+    "aiosqlite>=0.19.0",
 ]
 
 [tool.black]
@@ -98,4 +98,4 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--verbose",
-] 
+]

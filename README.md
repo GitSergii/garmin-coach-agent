@@ -4,7 +4,7 @@
 
 A single-user, self-hosted AI running coach that pulls data from Garmin Connect and delivers coaching, analysis, weekly plans, and charts through a private Telegram chat.
 
-[![CI](https://github.com/GitSergii/Garmin-Coach/actions/workflows/ci.yml/badge.svg)](https://github.com/GitSergii/Garmin-Coach/actions/workflows/ci.yml)
+[![CI](https://github.com/GitSergii/garmin-coach-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/GitSergii/garmin-coach-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![ADK](https://img.shields.io/badge/Google_ADK-1.x-4285F4)
 ![Gemini](https://img.shields.io/badge/Gemini_2.5_Flash-enabled-green)
@@ -94,8 +94,8 @@ This simplifies the security model dramatically and makes the codebase easier to
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/GitSergii/Garmin-Coach.git
-cd Garmin-Coach
+git clone https://github.com/GitSergii/garmin-coach-agent.git
+cd garmin-coach-agent
 uv venv --python 3.11
 uv sync
 
@@ -110,6 +110,34 @@ cp .env.example .env
 Send any private message to your Telegram bot. The first message binds you as the owner.
 
 Run `/setup` to enter your Garmin credentials, then `/sync` to pull your data.
+
+Once synced, just talk to it naturally:
+
+```
+You:   How did I do this week?
+Bot:   Here's your week summary: 4 runs, 61 km total, avg resting HR 44 bpm.
+       Sleep averaged 7.2h with solid REM. Load is moderate — no overtraining signal.
+
+You:   Am I overtraining?
+Bot:   No clear overtraining signal. Resting HR is stable and sleep quality is good.
+       Last week's load (61 km) is consistent with your recent trend. You're building well.
+
+You:   Build me a training plan for next week. Goal: 100km ultramarathon.
+Bot:   Weekly objective: aerobic base + endurance for 100 km ultra.
+       - 4 × Easy runs: 8–10 km, conversational pace
+       - 1 × Threshold session: 8 km with short intervals
+       - 1 × Long run: 18–22 km, easy and time-on-feet focused
+       - 1–2 rest/active recovery days
+       Keep weekly increase under 10%. If resting HR is elevated, drop the quality session.
+
+You:   Show my sleep trend
+Bot:   [sends chart image — 14-day sleep bar chart with 7-day rolling average]
+
+You:   How far did I run last Tuesday?
+Bot:   You ran 8.6 km on Tuesday May 8, avg HR 128 bpm, elevation gain 110 m.
+```
+
+---
 
 ### Docker Compose
 

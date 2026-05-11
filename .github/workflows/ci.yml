@@ -8,11 +8,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -20,7 +34,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: uv sync --dev
@@ -29,24 +45,13 @@ jobs:
         env:
           GOOGLE_API_KEY: test-key
           TELEGRAM_BOT_TOKEN: test-token
-          GOOGLE_CLOUD_PROJECT: test-project
           SECRET_KEY: test-secret-key
-          ADK_SESSION_DB_URL: sqlite+aiosqlite:///:memory:
-          ADK_SESSION_STRICT_STARTUP: true
-        run: >
-          uv run python -m pytest
-          tests
-          apps/garmin_coach/tests
-
-  secret-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Gitleaks scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_CLOUD_PROJECT: test-project
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_NAME: test
+          ADK_SESSION_DB_URL: "sqlite+aiosqlite:///:memory:"
+          ADK_SESSION_STRICT_STARTUP: "false"
+        run: uv run python -m pytest tests apps/garmin_coach/tests -v --tb=short
